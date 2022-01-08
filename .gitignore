@@ -1,0 +1,8 @@
+/*
+!erratum.csv
+!.gitignore
+!/src
+/src/*
+!/src/main.py
+!/src/plot.py
+!/data
