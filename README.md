@@ -26,9 +26,9 @@
 
 ## 原典資料
 
-* 「国土数値情報（高速道路時系列データ）」（国土交通省）（https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N06-v1_2.html）を加工して作成。
+* 「国土数値情報（高速道路時系列データ）」（国土交通省）（ https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N06-v1_2.html ）を加工して作成。
   * 国土数値情報（高速道路時系列データ）は、CC-BY 4.0と互換性を持つ、国土数値情報ダウンロードサイトコンテンツ利用規約（政府標準利用規約準拠版）によって公開されている。
-* 「日本の高速道路一覧 - Wikipedia」（https://ja.wikipedia.org/wiki/%E6%97%A5%E6%9C%AC%E3%81%AE%E9%AB%98%E9%80%9F%E9%81%93%E8%B7%AF%E4%B8%80%E8%A6%A7）および、当該ページからリンクされた各路線の記事 を加工して作成。
+* 「日本の高速道路一覧 - Wikipedia」（ https://ja.wikipedia.org/wiki/%E6%97%A5%E6%9C%AC%E3%81%AE%E9%AB%98%E9%80%9F%E9%81%93%E8%B7%AF%E4%B8%80%E8%A6%A7 ）および、当該ページからリンクされた各路線の記事 を加工して作成。
   * Wikipediaの文章素材は CC-BY-SA 3.0 に従った二次利用が認められている。
 
 ## ライセンス
