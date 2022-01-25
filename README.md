@@ -44,3 +44,7 @@
 ## ライセンス
 
 データセットは CC-BY-SA 3.0 にて、ソースコードは MIT License にて公開される。
+
+## UDC
+
+本作品は [アーバンデータチャレンジ（UDC）2021](https://urbandata-challenge.jp/2021submitstart) に参加します。
