@@ -1,6 +1,7 @@
 import typing
 import math
 import json
+import requests
 import urllib.parse
 
 from dataclasses import dataclass
@@ -45,8 +46,8 @@ class WikipediaParser:
         Returns:
             施設名とキロポスト情報のDataframe
         """
-
-        dfs = pd.read_html(self.url, match="施設名")
+        html = requests.get(self.url)
+        dfs = pd.read_html(html.text.replace('<br />', ' '), match="施設名")
 
         if self.table_num is None:
             for i in range(WikipediaParser.MAX_SEARCH):
@@ -81,6 +82,7 @@ class WikipediaParser:
         df.columns = pd.Index(df.columns)  # MultiIndexだったらIndexに直す
         df.rename(columns={df.columns[1]: "name", df.columns[3]: "kp"}, inplace=True)
         df = df[["name", "kp"]].copy()
+        df["kp"] = df["kp"].str.replace(r"\s.+", "", regex=True)  # kpが複数書かれている場合最初だけ残して削除
         df["kp"] = pd.to_numeric(df["kp"], errors="coerce")
         df.dropna(inplace=True)
         df.reset_index(drop=True, inplace=True)
