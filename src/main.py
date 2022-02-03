@@ -1,6 +1,8 @@
+import os
 import typing
 import math
 import json
+import pickle
 import requests
 import urllib.parse
 
@@ -97,7 +99,7 @@ class RoadMaker:
     HIGHWAY_SECTION = r".\data\N06-20_HighwaySection_fixed.geojson"
     JOINT = r".\data\N06-20_Joint_fixed.geojson"
     KP = r".\kp.csv"
-    NODELINK = r".\data\nodelink.json"
+    NODELINK = r".\data\nodelink.pickle"
     LENGTH = r".\data\length.json"
     RESULT_HIGHWAY_POINT = r".\data\highway_point.geojson"
     RESULT_HIGHWAY_PATH = r".\data\highway_path.geojson"
@@ -116,10 +118,10 @@ class RoadMaker:
         self.table_search = table_search
         self.wiki_table_num = wiki_table_num
 
-        if update_graph:
-            self.G = RoadMaker._section_to_nodelink()
+        if update_graph or not os.path.isfile(RoadMaker.NODELINK):
+            self.G = RoadMaker._write_nodelink_pickle()
         else:
-            self.G = RoadMaker._read_nodelink_json()
+            self.G = RoadMaker._read_nodelink_pickle()
 
         self.df_wiki_table = pd.DataFrame()
         self.df_point = pd.DataFrame()
@@ -450,9 +452,9 @@ class RoadMaker:
         return df_joint[["name", "name_prefix", "coordinates"]]
 
     @staticmethod
-    def _section_to_nodelink() -> nx.Graph:
+    def _write_nodelink_pickle() -> nx.Graph:
         """
-        `N06-18_HighwaySection.json`のデータをnx.Graphに整形し、`nodelink.json`に保存する。
+        `HighwaySection_fixed.geojson`のデータをnx.Graphに整形し、`nodelink.pickle`に保存したうえで返す。
         Returns:
             高速道路のGraph
         """
@@ -467,22 +469,22 @@ class RoadMaker:
                 G.add_edge(tuple(edges[i]), tuple(edges[i + 1]),
                            weight=RoadMaker._euclidean_distance(edges[i], edges[i + 1]))
 
-        with open(RoadMaker.NODELINK, "w", encoding="utf-8_sig") as f:
-            json.dump(nx.node_link_data(G), f, ensure_ascii=False)
+        with open(RoadMaker.NODELINK, "wb") as f:
+            pickle.dump(G, f)
 
-        print("nodelink.json を更新しました。")
+        print("nodelink.pickle を更新しました。")
         return G
 
     @staticmethod
-    def _read_nodelink_json() -> nx.Graph:
+    def _read_nodelink_pickle() -> nx.Graph:
         """
-        `nodelink.json`のデータをnx.Graphにして返す
+        `nodelink.pickle`のデータをnx.Graphにして返す。
         Returns:
             高速道路のGraph
         """
 
-        with open(RoadMaker.NODELINK, encoding="utf-8-sig") as f:
-            G: nx.Graph = nx.node_link_graph(json.load(f))
+        with open(RoadMaker.NODELINK, "rb") as f:
+            G: nx.Graph = pickle.load(f)
         return G
 
 
