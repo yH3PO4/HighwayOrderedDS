@@ -48,8 +48,11 @@ class WikipediaParser:
         Returns:
             施設名とキロポスト情報のDataframe
         """
-        html = requests.get(self.url)
-        dfs = pd.read_html(html.text.replace('<br />', ' '), match="施設名")
+        res = requests.get(self.url)
+        data = json.loads(res.text)
+        k, v = data["query"]["pages"].popitem()
+        html = v["revisions"][0]["*"]
+        dfs = pd.read_html(html.replace('<br />', ' '), match="施設名")
 
         if self.table_num is None:
             for i in range(WikipediaParser.MAX_SEARCH):
@@ -139,7 +142,7 @@ class RoadMaker:
             if self.local:
                 target_url = rf".\wikipedia\{self.road_name.main_name} - Wikipedia.html"
             else:
-                target_url = rf"https://ja.wikipedia.org/wiki/{urllib.parse.quote(self.road_name.main_name)}"
+                target_url = rf"https://ja.wikipedia.org/w/api.php?format=json&action=query&prop=revisions&titles={urllib.parse.quote(self.road_name.main_name)}&rvprop=content&rvparse"
 
             wp = WikipediaParser(target_url, (None if self.table_search else self.wiki_table_num))
             self.df_wiki_table = wp.fetch_table()
