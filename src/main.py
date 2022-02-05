@@ -40,9 +40,9 @@ class MediaWikiGateway:
 
     def query_text(self) -> str:
         """
-        wikipediaのページ本文を取得する
+        wikipediaのページ本文を取得する。
         Returns:
-
+            Wikipedia本文のhtml文字列
         """
         payload = {"format": "json",
                    "action": "parse",
@@ -64,7 +64,6 @@ class WikipediaTableParser:
     def fetch_table(self) -> pd.DataFrame:
         """
         wikipediaから施設名とキロポスト情報を取得する。
-
         Returns:
             施設名とキロポスト情報のDataframe
         """
