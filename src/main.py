@@ -32,13 +32,33 @@ class RoadName:
             return f"{self.main_name}_{self.sub_name}"
 
 
-class WikipediaParser:
+class MediaWikiGateway:
+    URL = "https://ja.wikipedia.org/w/api.php"
+
+    def __init__(self, title: str) -> None:
+        self.title = title
+
+    def query_text(self) -> str:
+        """
+        wikipediaのページ本文を取得する
+        Returns:
+
+        """
+        payload = {"format": "json",
+                   "action": "parse",
+                   "page": self.title}
+        res = requests.get(MediaWikiGateway.URL, payload).json()
+        html_doc = res["parse"]["text"]["*"]
+        return html_doc
+
+
+class WikipediaTableParser:
     MAX_SEARCH = 25
 
     def __init__(self,
-                 url: str,
+                 html_doc: str,
                  table_num: typing.Optional[int] = None) -> None:
-        self.url = url
+        self.html_doc = html_doc
         self.table_num = table_num
 
     def fetch_table(self) -> pd.DataFrame:
@@ -48,14 +68,10 @@ class WikipediaParser:
         Returns:
             施設名とキロポスト情報のDataframe
         """
-        res = requests.get(self.url)
-        data = json.loads(res.text)
-        k, v = data["query"]["pages"].popitem()
-        html = v["revisions"][0]["*"]
-        dfs = pd.read_html(html.replace('<br />', ' '), match="施設名")
+        dfs = pd.read_html(self.html_doc.replace('<br />', ' '), match="施設名")
 
         if self.table_num is None:
-            for i in range(WikipediaParser.MAX_SEARCH):
+            for i in range(WikipediaTableParser.MAX_SEARCH):
                 try:
                     df = self._format_table(dfs[i])
                     print(df)
@@ -68,7 +84,7 @@ class WikipediaParser:
                     continue
         else:
             try:
-                df = WikipediaParser._format_table(dfs[self.table_num])
+                df = WikipediaTableParser._format_table(dfs[self.table_num])
                 return df
             except IndexError:
                 raise RuntimeError(f"指定された{self.table_num}番目の表が見つかりませんでした。")
@@ -110,13 +126,11 @@ class RoadMaker:
     def __init__(self,
                  road_name: RoadName,
                  update_graph: bool = False,
-                 local: bool = False,
                  local_csv: bool = False,
                  table_search: bool = True,
                  wiki_table_num: int = 0) -> None:
         self.road_name = RoadName(*road_name.split("_", 1))  # "_" 以降は支線名として登録
         self.update_graph = update_graph
-        self.local = local
         self.local_csv = local_csv
         self.table_search = table_search
         self.wiki_table_num = wiki_table_num
@@ -139,12 +153,9 @@ class RoadMaker:
         if self.local_csv:
             self.df_wiki_table = pd.read_csv(RoadMaker.KP, index_col=0)
         else:
-            if self.local:
-                target_url = rf".\wikipedia\{self.road_name.main_name} - Wikipedia.html"
-            else:
-                target_url = rf"https://ja.wikipedia.org/w/api.php?format=json&action=query&prop=revisions&titles={urllib.parse.quote(self.road_name.main_name)}&rvprop=content&rvparse"
-
-            wp = WikipediaParser(target_url, (None if self.table_search else self.wiki_table_num))
+            mg = MediaWikiGateway(self.road_name.main_name)
+            html_doc = mg.query_text()
+            wp = WikipediaTableParser(html_doc, (None if self.table_search else self.wiki_table_num))
             self.df_wiki_table = wp.fetch_table()
             self.df_wiki_table.to_csv(RoadMaker.KP, encoding="utf-8-sig")
 
@@ -493,11 +504,10 @@ class RoadMaker:
 
 def main(road_name: RoadName,
          update_graph: bool = False,
-         local: bool = False,
          local_csv: bool = False,
          table_search: bool = True,
          wiki_table_num: int = 0) -> None:
-    rm = RoadMaker(road_name, update_graph, local, local_csv, table_search, wiki_table_num)
+    rm = RoadMaker(road_name, update_graph, local_csv, table_search, wiki_table_num)
     rm.fetch_joints()
     rm.find_path()
     rm.calc_line_length()
