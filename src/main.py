@@ -46,9 +46,11 @@ class MediaWikiGateway:
         """
         payload = {"format": "json",
                    "action": "parse",
+                   "prop": "text",
+                   "formatversion": 2,
                    "page": self.title}
         res = requests.get(MediaWikiGateway.URL, payload).json()
-        html_doc = res["parse"]["text"]["*"]
+        html_doc = res["parse"]["text"]
         return html_doc
 
 
