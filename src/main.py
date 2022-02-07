@@ -4,7 +4,6 @@ import math
 import json
 import pickle
 import requests
-import urllib.parse
 
 from dataclasses import dataclass
 
