@@ -1,8 +1,10 @@
 import os
 import typing
+import time
 import math
 import json
 import pickle
+import re
 import requests
 import urllib.parse
 
@@ -48,6 +50,25 @@ class MediaWikiGateway:
                    "action": "parse",
                    "prop": "text",
                    "formatversion": 2,
+                   "page": self.title}
+        res = requests.get(MediaWikiGateway.URL, payload).json()
+        html_doc = res["parse"]["text"]
+        return html_doc
+
+    def query_first_section(self) -> str:
+        """
+        wikipediaの最初のセクションの文章を取得する。
+        Returns:
+            Wikipediaの最初のセクションのhtml文字列
+        Notes:
+            wikipediaの最初のセクションは、infoboxを含むが、infoboxのみを取り出してくるものではない。
+        """
+        payload = {"format": "json",
+                   "action": "parse",
+                   "prop": "text",
+                   "formatversion": 2,
+                   "section": 0,
+                   "redirects": True,
                    "page": self.title}
         res = requests.get(MediaWikiGateway.URL, payload).json()
         html_doc = res["parse"]["text"]
@@ -113,6 +134,26 @@ class WikipediaTableParser:
             raise ValueError
 
         return df
+
+
+class WikipediaInfoboxParser:
+    def __init__(self,
+                 html_doc: str) -> None:
+        self.html_doc = html_doc
+
+    def fetch_coordinate(self) -> typing.Optional[tuple[float, float]]:
+        """
+        wikipediaに掲載されている施設の緯度と経度を返す。
+        Returns:
+            lon, lat
+        """
+        df = pd.read_html(self.html_doc, index_col=0, match="所在地")[0]
+        lonlatstr = df.loc["所在地", :].values[0]
+        lon_match = re.search(r"(?<=東経)[0-9]+\.[0-9]+(?=度)", lonlatstr)
+        lat_match = re.search(r"(?<=北緯)[0-9]+\.[0-9]+(?=度)", lonlatstr)
+        if lon_match is None or lat_match is None:
+            return None
+        return float(lon_match.group()), float(lat_match.group())
 
 
 class RoadMaker:
@@ -276,6 +317,8 @@ class RoadMaker:
     def estimate_SAPA(self) -> None:
         """
         時系列データに存在しないSA/PAの位置を推定し、Dataframeに追加する。
+        Notes:
+            MediaWiki API のクエリを毎秒1回程度に抑えるため、ループ内で1秒/回の停止処理を入れている。
         """
         df_SAPA = pd.merge(self.df_point[["name", "coordinates"]], self.df_wiki_table,
                            on="name", how="right", indicator=True)
@@ -301,15 +344,30 @@ class RoadMaker:
 
         for i in range(len(df_SAPA) - 1):
             if df_SAPA.at[i + 1, "_merge"] == "right_only":
-                dist = abs(df_SAPA.at[i, "kp"] - df_SAPA.at[i + 1, "kp"])
-                path = df_SAPA.at[i, "path"]
+                path: list[tuple[float, float]] = df_SAPA.at[i, "path"]
                 j = 0
-                while dist > 0:
-                    dist -= RoadMaker._euclidean_distance(path[j], path[j + 1])
-                    j += 1
-                    if j == len(path) - 2:
-                        print(f"{df_SAPA.at[i + 1, 'name']}の推定された位置と{df_SAPA.at[i + 2, 'name']}の位置が近接しています。")
-                        break
+
+                mg = MediaWikiGateway(df_SAPA.at[i + 1, "name"])
+                html_doc = mg.query_first_section()
+                wp = WikipediaInfoboxParser(html_doc)
+                accurate_coordinate = wp.fetch_coordinate()
+                if accurate_coordinate is None:
+                    print(f"{df_SAPA.at[i + 1, 'name']} の位置情報の取得に失敗しました。キロポスト情報により位置を推定します。")
+                    dist = abs(df_SAPA.at[i, "kp"] - df_SAPA.at[i + 1, "kp"])
+                    while dist > 0:
+                        dist -= RoadMaker._euclidean_distance(path[j], path[j + 1])
+                        j += 1
+                        if j == len(path) - 2:
+                            print(f"{df_SAPA.at[i + 1, 'name']}の推定された位置と{df_SAPA.at[i + 2, 'name']}の位置が近接しています。")
+                            break
+                else:
+                    print(f"{df_SAPA.at[i + 1, 'name']} の位置情報を取得しました。")
+                    dist = float("inf")
+                    for k, node in enumerate(path[1:-1], 1):
+                        if dist > (tmp_dist := RoadMaker._euclidean_distance(accurate_coordinate, node)):
+                            dist = tmp_dist
+                            j = k
+                time.sleep(1)
 
                 new_coordinate = path[j]
                 new_path = path[j:]
