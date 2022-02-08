@@ -55,7 +55,7 @@ class MediaWikiGateway:
         html_doc = res["parse"]["text"]
         return html_doc
 
-    def query_first_section(self) -> str:
+    def query_first_section(self) -> typing.Optional[str]:
         """
         wikipediaの最初のセクションの文章を取得する。
         Returns:
@@ -71,8 +71,11 @@ class MediaWikiGateway:
                    "redirects": True,
                    "page": self.title}
         res = requests.get(MediaWikiGateway.URL, payload).json()
-        html_doc = res["parse"]["text"]
-        return html_doc
+        try:
+            html_doc = res["parse"]["text"]
+            return html_doc
+        except KeyError:
+            return None
 
 
 class WikipediaTableParser:
@@ -345,28 +348,17 @@ class RoadMaker:
         for i in range(len(df_SAPA) - 1):
             if df_SAPA.at[i + 1, "_merge"] == "right_only":
                 path: list[tuple[float, float]] = df_SAPA.at[i, "path"]
-                j = 0
-
                 mg = MediaWikiGateway(df_SAPA.at[i + 1, "name"])
                 html_doc = mg.query_first_section()
-                wp = WikipediaInfoboxParser(html_doc)
-                accurate_coordinate = wp.fetch_coordinate()
-                if accurate_coordinate is None:
-                    print(f"{df_SAPA.at[i + 1, 'name']} の位置情報の取得に失敗しました。キロポスト情報により位置を推定します。")
-                    dist = abs(df_SAPA.at[i, "kp"] - df_SAPA.at[i + 1, "kp"])
-                    while dist > 0:
-                        dist -= RoadMaker._euclidean_distance(path[j], path[j + 1])
-                        j += 1
-                        if j == len(path) - 2:
-                            print(f"{df_SAPA.at[i + 1, 'name']}の推定された位置と{df_SAPA.at[i + 2, 'name']}の位置が近接しています。")
-                            break
+                if html_doc is None:
+                    j = self._estimate_SAPA_kp(df_SAPA, i, path)
                 else:
-                    print(f"{df_SAPA.at[i + 1, 'name']} の位置情報を取得しました。")
-                    dist = float("inf")
-                    for k, node in enumerate(path[1:-1], 1):
-                        if dist > (tmp_dist := RoadMaker._euclidean_distance(accurate_coordinate, node)):
-                            dist = tmp_dist
-                            j = k
+                    wp = WikipediaInfoboxParser(html_doc)
+                    accurate_coordinate = wp.fetch_coordinate()
+                    if accurate_coordinate is None:
+                        j = self._estimate_SAPA_kp(df_SAPA, i, path)
+                    else:
+                        j = self._estimate_SAPA_coor(df_SAPA, i, path, accurate_coordinate)
                 time.sleep(1)
 
                 new_coordinate = path[j]
@@ -559,6 +551,35 @@ class RoadMaker:
         with open(RoadMaker.NODELINK, "rb") as f:
             G: nx.Graph = pickle.load(f)
         return G
+
+    @staticmethod
+    def _estimate_SAPA_coor(df_SAPA: pd.DataFrame,
+                            i: int,
+                            path: list[tuple[float, float]],
+                            accurate_coordinate: tuple[float, float]) -> int:
+        print(f"{df_SAPA.at[i + 1, 'name']} の位置情報を取得しました。")
+        res_idx = 0
+        dist = float("inf")
+        for k, node in enumerate(path[1:-1], 1):
+            if dist > (tmp_dist := RoadMaker._euclidean_distance(accurate_coordinate, node)):
+                dist = tmp_dist
+                res_idx = k
+        return res_idx
+
+    @staticmethod
+    def _estimate_SAPA_kp(df_SAPA: pd.DataFrame,
+                          i: int,
+                          path: list[tuple[float, float]]) -> int:
+        print(f"{df_SAPA.at[i + 1, 'name']} の位置情報の取得に失敗しました。キロポスト情報により位置を推定します。")
+        res_idx = 0
+        dist = abs(df_SAPA.at[i, "kp"] - df_SAPA.at[i + 1, "kp"])
+        while dist > 0:
+            dist -= RoadMaker._euclidean_distance(path[res_idx], path[res_idx + 1])
+            res_idx += 1
+            if res_idx == len(path) - 2:
+                print(f"{df_SAPA.at[i + 1, 'name']}の推定された位置と{df_SAPA.at[i + 2, 'name']}の位置が近接しています。")
+                break
+        return res_idx
 
 
 def main(road_name: RoadName,
