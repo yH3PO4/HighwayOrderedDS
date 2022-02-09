@@ -348,7 +348,8 @@ class RoadMaker:
         for i in range(len(df_SAPA) - 1):
             if df_SAPA.at[i + 1, "_merge"] == "right_only":
                 path: list[tuple[float, float]] = df_SAPA.at[i, "path"]
-                mg = MediaWikiGateway(df_SAPA.at[i + 1, "name"])
+                name = df_SAPA.at[i + 1, "name"].replace("SA", "サービスエリア").replace("PA", "パーキングエリア")
+                mg = MediaWikiGateway(name)
                 html_doc = mg.query_first_section()
                 if html_doc is None:
                     j = self._estimate_SAPA_kp(df_SAPA, i, path)
