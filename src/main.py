@@ -87,7 +87,7 @@ class WikipediaParser:
         df.columns = pd.Index(df.columns)  # MultiIndexだったらIndexに直す
         df.rename(columns={df.columns[1]: "name", df.columns[3]: "kp"}, inplace=True)
         df = df[["name", "kp"]].copy()
-        df["kp"] = df["kp"].str.replace(r"\s.+", "", regex=True)  # kpが複数書かれている場合最初だけ残して削除
+        df["kp"] = df["kp"].astype(str).str.replace(r"\s.+", "", regex=True)  # kpが複数書かれている場合最初だけ残して削除
         df["kp"] = pd.to_numeric(df["kp"], errors="coerce")
         df.dropna(inplace=True)
         df.reset_index(drop=True, inplace=True)
