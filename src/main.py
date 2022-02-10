@@ -1,8 +1,10 @@
 import os
 import typing
+import time
 import math
 import json
 import pickle
+import re
 import requests
 import urllib.parse
 
@@ -32,30 +34,69 @@ class RoadName:
             return f"{self.main_name}_{self.sub_name}"
 
 
-class WikipediaParser:
+class MediaWikiGateway:
+    URL = "https://ja.wikipedia.org/w/api.php"
+
+    def __init__(self, title: str) -> None:
+        self.title = title
+
+    def query_text(self) -> str:
+        """
+        wikipediaのページ本文を取得する。
+        Returns:
+            Wikipedia本文のhtml文字列
+        """
+        payload = {"format": "json",
+                   "action": "parse",
+                   "prop": "text",
+                   "formatversion": 2,
+                   "page": self.title}
+        res = requests.get(MediaWikiGateway.URL, payload).json()
+        html_doc = res["parse"]["text"]
+        return html_doc
+
+    def query_first_section(self) -> typing.Optional[str]:
+        """
+        wikipediaの最初のセクションの文章を取得する。
+        Returns:
+            Wikipediaの最初のセクションのhtml文字列
+        Notes:
+            wikipediaの最初のセクションは、infoboxを含むが、infoboxのみを取り出してくるものではない。
+        """
+        payload = {"format": "json",
+                   "action": "parse",
+                   "prop": "text",
+                   "formatversion": 2,
+                   "section": 0,
+                   "redirects": True,
+                   "page": self.title}
+        res = requests.get(MediaWikiGateway.URL, payload).json()
+        try:
+            html_doc = res["parse"]["text"]
+            return html_doc
+        except KeyError:
+            return None
+
+
+class WikipediaTableParser:
     MAX_SEARCH = 25
 
     def __init__(self,
-                 url: str,
+                 html_doc: str,
                  table_num: typing.Optional[int] = None) -> None:
-        self.url = url
+        self.html_doc = html_doc
         self.table_num = table_num
 
     def fetch_table(self) -> pd.DataFrame:
         """
         wikipediaから施設名とキロポスト情報を取得する。
-
         Returns:
             施設名とキロポスト情報のDataframe
         """
-        res = requests.get(self.url)
-        data = json.loads(res.text)
-        k, v = data["query"]["pages"].popitem()
-        html = v["revisions"][0]["*"]
-        dfs = pd.read_html(html.replace('<br />', ' '), match="施設名")
+        dfs = pd.read_html(self.html_doc.replace('<br />', ' '), match="施設名")
 
         if self.table_num is None:
-            for i in range(WikipediaParser.MAX_SEARCH):
+            for i in range(WikipediaTableParser.MAX_SEARCH):
                 try:
                     df = self._format_table(dfs[i])
                     print(df)
@@ -68,7 +109,7 @@ class WikipediaParser:
                     continue
         else:
             try:
-                df = WikipediaParser._format_table(dfs[self.table_num])
+                df = WikipediaTableParser._format_table(dfs[self.table_num])
                 return df
             except IndexError:
                 raise RuntimeError(f"指定された{self.table_num}番目の表が見つかりませんでした。")
@@ -98,6 +139,26 @@ class WikipediaParser:
         return df
 
 
+class WikipediaInfoboxParser:
+    def __init__(self,
+                 html_doc: str) -> None:
+        self.html_doc = html_doc
+
+    def fetch_coordinate(self) -> typing.Optional[tuple[float, float]]:
+        """
+        wikipediaに掲載されている施設の緯度と経度を返す。
+        Returns:
+            lon, lat
+        """
+        df = pd.read_html(self.html_doc, index_col=0, match="所在地")[0]
+        lonlatstr = df.loc["所在地", :].values[0]
+        lon_match = re.search(r"(?<=東経)[0-9]+\.[0-9]+(?=度)", lonlatstr)
+        lat_match = re.search(r"(?<=北緯)[0-9]+\.[0-9]+(?=度)", lonlatstr)
+        if lon_match is None or lat_match is None:
+            return None
+        return float(lon_match.group()), float(lat_match.group())
+
+
 class RoadMaker:
     HIGHWAY_SECTION = r".\data\N06-20_HighwaySection_fixed.geojson"
     JOINT = r".\data\N06-20_Joint_fixed.geojson"
@@ -110,13 +171,11 @@ class RoadMaker:
     def __init__(self,
                  road_name: RoadName,
                  update_graph: bool = False,
-                 local: bool = False,
                  local_csv: bool = False,
                  table_search: bool = True,
                  wiki_table_num: int = 0) -> None:
         self.road_name = RoadName(*road_name.split("_", 1))  # "_" 以降は支線名として登録
         self.update_graph = update_graph
-        self.local = local
         self.local_csv = local_csv
         self.table_search = table_search
         self.wiki_table_num = wiki_table_num
@@ -139,12 +198,9 @@ class RoadMaker:
         if self.local_csv:
             self.df_wiki_table = pd.read_csv(RoadMaker.KP, index_col=0)
         else:
-            if self.local:
-                target_url = rf".\wikipedia\{self.road_name.main_name} - Wikipedia.html"
-            else:
-                target_url = rf"https://ja.wikipedia.org/w/api.php?format=json&action=query&prop=revisions&titles={urllib.parse.quote(self.road_name.main_name)}&rvprop=content&rvparse"
-
-            wp = WikipediaParser(target_url, (None if self.table_search else self.wiki_table_num))
+            mg = MediaWikiGateway(self.road_name.main_name)
+            html_doc = mg.query_text()
+            wp = WikipediaTableParser(html_doc, (None if self.table_search else self.wiki_table_num))
             self.df_wiki_table = wp.fetch_table()
             self.df_wiki_table.to_csv(RoadMaker.KP, encoding="utf-8-sig")
 
@@ -264,6 +320,8 @@ class RoadMaker:
     def estimate_SAPA(self) -> None:
         """
         時系列データに存在しないSA/PAの位置を推定し、Dataframeに追加する。
+        Notes:
+            MediaWiki API のクエリを毎秒1回程度に抑えるため、ループ内で1秒/回の停止処理を入れている。
         """
         df_SAPA = pd.merge(self.df_point[["name", "coordinates"]], self.df_wiki_table,
                            on="name", how="right", indicator=True)
@@ -289,15 +347,20 @@ class RoadMaker:
 
         for i in range(len(df_SAPA) - 1):
             if df_SAPA.at[i + 1, "_merge"] == "right_only":
-                dist = abs(df_SAPA.at[i, "kp"] - df_SAPA.at[i + 1, "kp"])
-                path = df_SAPA.at[i, "path"]
-                j = 0
-                while dist > 0:
-                    dist -= RoadMaker._euclidean_distance(path[j], path[j + 1])
-                    j += 1
-                    if j == len(path) - 2:
-                        print(f"{df_SAPA.at[i + 1, 'name']}の推定された位置と{df_SAPA.at[i + 2, 'name']}の位置が近接しています。")
-                        break
+                path: list[tuple[float, float]] = df_SAPA.at[i, "path"]
+                name = df_SAPA.at[i + 1, "name"].replace("SA", "サービスエリア").replace("PA", "パーキングエリア")
+                mg = MediaWikiGateway(name)
+                html_doc = mg.query_first_section()
+                if html_doc is None:
+                    j = self._estimate_SAPA_kp(df_SAPA, i, path)
+                else:
+                    wp = WikipediaInfoboxParser(html_doc)
+                    accurate_coordinate = wp.fetch_coordinate()
+                    if accurate_coordinate is None:
+                        j = self._estimate_SAPA_kp(df_SAPA, i, path)
+                    else:
+                        j = self._estimate_SAPA_coor(df_SAPA, i, path, accurate_coordinate)
+                time.sleep(1)
 
                 new_coordinate = path[j]
                 new_path = path[j:]
@@ -490,14 +553,42 @@ class RoadMaker:
             G: nx.Graph = pickle.load(f)
         return G
 
+    @staticmethod
+    def _estimate_SAPA_coor(df_SAPA: pd.DataFrame,
+                            i: int,
+                            path: list[tuple[float, float]],
+                            accurate_coordinate: tuple[float, float]) -> int:
+        print(f"{df_SAPA.at[i + 1, 'name']} の位置情報を取得しました。")
+        res_idx = 0
+        dist = float("inf")
+        for k, node in enumerate(path[1:-1], 1):
+            if dist > (tmp_dist := RoadMaker._euclidean_distance(accurate_coordinate, node)):
+                dist = tmp_dist
+                res_idx = k
+        return res_idx
+
+    @staticmethod
+    def _estimate_SAPA_kp(df_SAPA: pd.DataFrame,
+                          i: int,
+                          path: list[tuple[float, float]]) -> int:
+        print(f"{df_SAPA.at[i + 1, 'name']} の位置情報の取得に失敗しました。キロポスト情報により位置を推定します。")
+        res_idx = 0
+        dist = abs(df_SAPA.at[i, "kp"] - df_SAPA.at[i + 1, "kp"])
+        while dist > 0:
+            dist -= RoadMaker._euclidean_distance(path[res_idx], path[res_idx + 1])
+            res_idx += 1
+            if res_idx == len(path) - 2:
+                print(f"{df_SAPA.at[i + 1, 'name']}の推定された位置と{df_SAPA.at[i + 2, 'name']}の位置が近接しています。")
+                break
+        return res_idx
+
 
 def main(road_name: RoadName,
          update_graph: bool = False,
-         local: bool = False,
          local_csv: bool = False,
          table_search: bool = True,
          wiki_table_num: int = 0) -> None:
-    rm = RoadMaker(road_name, update_graph, local, local_csv, table_search, wiki_table_num)
+    rm = RoadMaker(road_name, update_graph, local_csv, table_search, wiki_table_num)
     rm.fetch_joints()
     rm.find_path()
     rm.calc_line_length()
