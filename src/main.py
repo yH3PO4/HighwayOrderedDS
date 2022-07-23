@@ -160,8 +160,8 @@ class WikipediaInfoboxParser:
 
 
 class RoadMaker:
-    HIGHWAY_SECTION = r".\data\N06-20_HighwaySection_fixed.geojson"
-    JOINT = r".\data\N06-20_Joint_fixed.geojson"
+    HIGHWAY_SECTION = r".\data\N06_HighwaySection_fixed.geojson"
+    JOINT = r".\data\N06_Joint_fixed.geojson"
     KP = r".\kp.csv"
     NODELINK = r".\data\nodelink.pickle"
     LENGTH = r".\data\length.json"
