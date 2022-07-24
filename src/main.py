@@ -529,6 +529,7 @@ class RoadMaker:
         df_joint.rename(columns={"properties.N06_018": "name", "geometry.coordinates": "coordinates"}, inplace=True)
         df_joint.replace(r"\\/", r"\/", regex=True, inplace=True)
         df_joint["name_prefix"] = df_joint["name"].replace(r"[ -~]+", "", regex=True)
+        df_joint["coordinates"] = df_joint["coordinates"].apply(_round_coordinate)
         return df_joint[["name", "name_prefix", "coordinates"]]
 
     @staticmethod
@@ -546,7 +547,7 @@ class RoadMaker:
         G = nx.Graph()
         for edges in df_section["coordinates_edge"]:
             for i in range(len(edges) - 1):
-                G.add_edge(tuple(edges[i]), tuple(edges[i + 1]),
+                G.add_edge(_round_coordinate(edges[i]), _round_coordinate(edges[i + 1]),
                            weight=RoadMaker._euclidean_distance(edges[i], edges[i + 1]))
 
         with open(RoadMaker.NODELINK, "wb") as f:
@@ -595,6 +596,10 @@ class RoadMaker:
                 print(f"{df_SAPA.at[i + 1, 'name']}の推定された位置と{df_SAPA.at[i + 2, 'name']}の位置が近接しています。")
                 break
         return res_idx
+
+
+def _round_coordinate(coordinate: list[float]) -> tuple[float, ...]:
+    return tuple(round(x, 6) for x in coordinate)
 
 
 def main(road_name: RoadName,
