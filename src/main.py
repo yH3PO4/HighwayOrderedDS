@@ -256,20 +256,19 @@ class RoadMaker:
         self.df_point.drop(del_indices, inplace=True)
         self.df_point.reset_index(inplace=True, drop=True)
 
-    def find_path(self) -> None:
+    def find_all_path(self) -> None:
         """
-        最短経路探索によって各施設間の経路を決定する。
+        各施設間の経路を決定する。
         """
         data_path = {"source": [], "target": [], "path": []}
         for i in range(len(self.df_point) - 1):
-            source, target = tuple(self.df_point.loc[i, "coordinates"]), tuple(self.df_point.loc[i + 1, "coordinates"])
-            try:
-                path = nx.astar_path(self.G, source, target, RoadMaker._substitution_distance)
-                data_path["source"].append(self.df_point.loc[i, "name"])
-                data_path["target"].append(self.df_point.loc[i + 1, "name"])
-                data_path["path"].append(path)
-            except nx.NetworkXNoPath:
+            path = self._find_path(i, i + 1)
+            if path is None:
                 continue
+            data_path["source"].append(self.df_point.loc[i, "name"])
+            data_path["target"].append(self.df_point.loc[i + 1, "name"])
+            data_path["path"].append(path)
+
         self.df_path = pd.DataFrame(data_path)
         plot.plot_oneline(self)
 
@@ -441,15 +440,30 @@ class RoadMaker:
         """
         新しい区間を追加する。
         """
-        source: tuple[float, float] = tuple(self.df_point.loc[source_idx, "coordinates"])
-        target: tuple[float, float] = tuple(self.df_point.loc[target_idx, "coordinates"])
-        path = nx.astar_path(self.G, source, target, RoadMaker._substitution_distance)
+        path = self._find_path(source_idx, target_idx)
+        if path is None:
+            return
         sr = pd.Series([self.df_point.loc[source_idx, "name"],
                         self.df_point.loc[target_idx, "name"], path], index=self.df_path.columns)
         self.df_path = self.df_path.append(sr, ignore_index=True)
         self.calc_line_length()
         plot.plot_oneline(self)
         print(f"{source_idx}, {target_idx} をつなぐ区間が追加されました。")
+
+    def _find_path(self, source_idx: int, target_idx: int) -> typing.Optional[list[tuple[int, int]]]:
+        """
+        最短経路探索によって2施設間の経路を決定する。
+        """
+        source: tuple[float, float] = tuple(self.df_point.loc[source_idx, "coordinates"])
+        target: tuple[float, float] = tuple(self.df_point.loc[target_idx, "coordinates"])
+        try:
+            path = nx.astar_path(self.G, source, target, RoadMaker._substitution_distance)
+            return path
+        except nx.NetworkXNoPath:
+            source_name = self.df_point.loc[source_idx, 'name']
+            target_name = self.df_point.loc[target_idx, 'name']
+            print(f"{source_name} から {target_name} へ到達するパスがありませんでした。")
+            return None
 
     @staticmethod
     def _euclidean_distance(l1: tuple[float, float], l2: tuple[float, float]) -> float:
@@ -590,7 +604,7 @@ def main(road_name: RoadName,
          wiki_table_num: int = 0) -> None:
     rm = RoadMaker(road_name, update_graph, local_csv, table_search, wiki_table_num)
     rm.fetch_joints()
-    rm.find_path()
+    rm.find_all_path()
     rm.calc_line_length()
     rm.delete_wrong_path()
     rm.estimate_SAPA()
