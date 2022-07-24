@@ -17,8 +17,8 @@
 | [highway_point.geojson](data/highway_point.geojson)          | IC, JCT, SA, PA の位置、所属する路線、順序等のデータ。       |
 | [highway_path.geojson](data/highway_path.geojson)            | 路線区間の位置、所属する路線、順序等のデータ。               |
 | [length.json](data/length.json)                              | 推定した各路線の路線延長。                                   |
-| [N06-20_Joint_fixed.geojson](data/N06-20_Joint_fixed.geojson) | IC, JCTの位置等のデータ。<br />高速道路時系列データを一部手で加工して作成。 |
-| [N06-20_HighwaySection_fixed.geojson](data/N06-20_HighwaySection_fixed.geojson) | 路線区間の位置等のデータ。<br />高速道路時系列データを一部手で加工して作成。 |
+| [N06_Joint_fixed.geojson](data/N06_Joint_fixed.geojson)      | IC, JCTの位置等のデータ。<br />高速道路時系列データを一部手で加工して作成。 |
+| [N06_HighwaySection_fixed.geojson](data/N06_HighwaySection_fixed.geojson) | 路線区間の位置等のデータ。<br />高速道路時系列データを一部手で加工して作成。 |
 
 ## 特徴
 
