@@ -403,7 +403,7 @@ class RoadMaker:
             columns=["road_name", "order", "name", "kp", "is_IC", "is_SIC", "is_JCT", "is_SAPA", "geometry"])
 
         print(gdf_point_cur)
-        gdf_point = gdf_point.append(gdf_point_cur)
+        gdf_point = pd.concat([gdf_point, gdf_point_cur])
         gdf_point.sort_values(["road_name", "order"], inplace=True)
         gdf_point.to_file(RoadMaker.RESULT_HIGHWAY_POINT, driver='GeoJSON')
 
@@ -420,7 +420,7 @@ class RoadMaker:
             columns=["road_name", "order", "source", "target", "geometry"])
 
         print(gdf_path_cur)
-        gdf_path = gdf_path.append(gdf_path_cur)
+        gdf_path = pd.concat([gdf_path, gdf_path_cur])
         gdf_path.sort_values(["road_name", "order"], inplace=True)
         gdf_path.to_file(RoadMaker.RESULT_HIGHWAY_PATH, driver='GeoJSON')
 
