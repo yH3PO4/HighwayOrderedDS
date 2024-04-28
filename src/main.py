@@ -276,12 +276,25 @@ class RoadMaker:
         """
         道路の開業済み延長を計算して `length.json` に登録する。`
         """
-        L = abs(pd.merge(self.df_path["target"], self.df_point[["name", "kp"]],
+        length_by_kp = abs(pd.merge(self.df_path["target"], self.df_point[["name", "kp"]],
                          left_on="target", right_on="name")["kp"] -
                 pd.merge(self.df_path["source"], self.df_point[["name", "kp"]],
                          left_on="source", right_on="name")["kp"]).sum()
-
-        print(f"開業済み延長: {round(L, 1)} km")
+        length_by_ls = 0.0
+        for path in self.df_path["path"]:  # 2点間の距離を加算
+            for i in range(len(path) - 1):
+                length_by_ls += RoadMaker._euclidean_distance(
+                    (path[i][1], path[i][0]), 
+                    (path[i+1][1], path[i+1][0])
+                )
+        if abs(length_by_kp - length_by_ls) / length_by_kp > 0.1:
+            print(f"推定延長が10%以上異なります。Linestringの推定値 ({round(length_by_ls, 1)} km) を採用します。")
+            print(f"推定延長(Wikipedia): {round(length_by_kp, 1)} km")
+            print(f"推定延長(Linestring): {round(length_by_ls, 1)} km")
+            L = length_by_ls
+        else:
+            print(f"推定延長: {round(length_by_kp, 1)} km")
+            L = length_by_kp
 
         with open(RoadMaker.LENGTH, "r", encoding="utf-8-sig") as f:
             d = json.load(f)
