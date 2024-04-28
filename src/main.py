@@ -276,30 +276,42 @@ class RoadMaker:
         """
         道路の開業済み延長を計算して `length.json` に登録する。`
         """
-        length_by_kp = abs(pd.merge(self.df_path["target"], self.df_point[["name", "kp"]],
-                         left_on="target", right_on="name")["kp"] -
-                pd.merge(self.df_path["source"], self.df_point[["name", "kp"]],
-                         left_on="source", right_on="name")["kp"]).sum()
-        length_by_ls = 0.0
+        # 1. キロポストベース距離
+        length_kp = abs(
+            pd.merge(
+                self.df_path["target"],
+                self.df_point,
+                left_on="target",
+                right_on="name",
+            )["kp"]
+            - pd.merge(
+                self.df_path["source"],
+                self.df_point,
+                left_on="source",
+                right_on="name",
+            )["kp"]
+        )
+
+        # 2. ジオメトリベース距離
+        length_geo = []
         for path in self.df_path["path"]:  # 2点間の距離を加算
+            _length_geo = 0.0
             for i in range(len(path) - 1):
-                length_by_ls += RoadMaker._euclidean_distance(
+                _length_geo += RoadMaker._euclidean_distance(
                     (path[i][1], path[i][0]), 
                     (path[i+1][1], path[i+1][0])
                 )
-        if abs(length_by_kp - length_by_ls) / length_by_kp > 0.1:
-            print(f"推定延長が10%以上異なります。Linestringの推定値 ({round(length_by_ls, 1)} km) を採用します。")
-            print(f"推定延長(Wikipedia): {round(length_by_kp, 1)} km")
-            print(f"推定延長(Linestring): {round(length_by_ls, 1)} km")
-            L = length_by_ls
-        else:
-            print(f"推定延長: {round(length_by_kp, 1)} km")
-            L = length_by_kp
+            _length_geo = round(_length_geo, 1)
+            length_geo.append(_length_geo)
+
+        assert len(length_kp) == len(length_geo)
+        length = length_kp.where(length_kp < 50, length_geo)
+        self.df_path["length"] = length
 
         with open(RoadMaker.LENGTH, "r", encoding="utf-8-sig") as f:
             d = json.load(f)
 
-        d[str(self.road_name)] = round(L, 1)
+        d[str(self.road_name)] = round(length.sum(), 1)
 
         with open(RoadMaker.LENGTH, 'w', encoding="utf-8-sig") as f:
             json.dump(d, f, ensure_ascii=False, indent=2)
@@ -425,12 +437,12 @@ class RoadMaker:
         if not gdf_path.empty:
             gdf_path = gdf_path[gdf_path["road_name"] != str(self.road_name)].copy()  # もとのを削除
 
-        gdf_path_cur = gpd.GeoDataFrame(self.df_path[["source", "target"]],
+        gdf_path_cur = gpd.GeoDataFrame(self.df_path[["source", "target", "length"]],
                                         geometry=self.df_path["path"].apply(lambda x: LineString(x)))
         gdf_path_cur["order"] = pd.RangeIndex(stop=len(gdf_path_cur))
         gdf_path_cur["road_name"] = str(self.road_name)
         gdf_path_cur = gdf_path_cur.reindex(
-            columns=["road_name", "order", "source", "target", "geometry"])
+            columns=["road_name", "order", "source", "target", "length", "geometry"])
 
         print(gdf_path_cur)
         gdf_path = pd.concat([gdf_path, gdf_path_cur])
@@ -623,10 +635,10 @@ def main(road_name: RoadName,
     rm = RoadMaker(road_name, update_graph, local_csv, table_search, wiki_table_num)
     rm.fetch_joints()
     rm.find_all_path()
-    rm.calc_line_length()
     rm.delete_wrong_path()
     rm.estimate_SAPA()
     rm.add_path()
+    rm.calc_line_length()
     rm.to_geojson()
 
 
