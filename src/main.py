@@ -303,9 +303,10 @@ class RoadMaker:
                 )
             _length_geo = round(_length_geo, 1)
             length_geo.append(_length_geo)
+        length_geo = pd.Series(length_geo, index=self.df_path.index)
 
         assert len(length_kp) == len(length_geo)
-        length = length_kp.where(length_kp < 50, length_geo)
+        length = length_kp.where((length_kp < 50) & (length_kp < length_geo * 2), length_geo)
         self.df_path["length"] = length
 
         with open(RoadMaker.LENGTH, "r", encoding="utf-8-sig") as f:
@@ -468,11 +469,13 @@ class RoadMaker:
         path = self._find_path(source_idx, target_idx)
         if path is None:
             return
-        sr = pd.Series([self.df_point.loc[source_idx, "name"],
-                        self.df_point.loc[target_idx, "name"], path], index=self.df_path.columns)
-        self.df_path = self.df_path.append(sr, ignore_index=True)
+        new_df = pd.DataFrame({"source": [self.df_point.loc[source_idx, "name"]],
+                               "target": [self.df_point.loc[target_idx, "name"]],
+                               "path": [path]})
+        self.df_path = pd.concat([self.df_path, new_df]).reset_index(drop=True)
         self.calc_line_length()
         plot.plot_oneline(self)
+        print(self.df_path)
         print(f"{source_idx}, {target_idx} をつなぐ区間が追加されました。")
 
     def _find_path(self, source_idx: int, target_idx: int) -> typing.Optional[list[tuple[int, int]]]:
