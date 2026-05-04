@@ -570,13 +570,20 @@ class RoadMaker:
         with open(RoadMaker.HIGHWAY_SECTION, encoding="utf-8_sig") as f:
             data = json.load(f)
         df_section: pd.DataFrame = pd.json_normalize(data["features"])
-        df_section = df_section.rename(columns={"geometry.coordinates": "coordinates_edge"})
 
         G = nx.Graph()
-        for edges in df_section["coordinates_edge"]:
-            for i in range(len(edges) - 1):
-                G.add_edge(_round_coordinate(edges[i]), _round_coordinate(edges[i + 1]),
-                           weight=RoadMaker._euclidean_distance(edges[i], edges[i + 1]))
+        for _, row in df_section.iterrows():
+            if row["geometry.type"] == "LineString":
+                edges_list = [row["geometry.coordinates"]]
+            elif row["geometry.type"] == "MultiLineString":
+                edges_list = row["geometry.coordinates"]
+            else:
+                continue
+
+            for edges in edges_list:
+                for i in range(len(edges) - 1):
+                    G.add_edge(_round_coordinate(edges[i]), _round_coordinate(edges[i + 1]),
+                               weight=RoadMaker._euclidean_distance(edges[i], edges[i + 1]))
 
         with open(RoadMaker.NODELINK, "wb") as f:
             pickle.dump(G, f)
