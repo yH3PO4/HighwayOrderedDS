@@ -5,6 +5,7 @@ import math
 import json
 import pickle
 import re
+import io
 import requests
 import urllib.parse
 
@@ -36,6 +37,7 @@ class RoadName:
 
 class MediaWikiGateway:
     URL = "https://ja.wikipedia.org/w/api.php"
+    HEADERS = {"User-Agent": "HighwayOrderedDS/1.0 (https://github.com/yui10/HighwayOrderedDS)"}
 
     def __init__(self, title: str) -> None:
         self.title = title
@@ -51,7 +53,7 @@ class MediaWikiGateway:
                    "prop": "text",
                    "formatversion": 2,
                    "page": self.title}
-        res = requests.get(MediaWikiGateway.URL, payload).json()
+        res = requests.get(MediaWikiGateway.URL, params=payload, headers=MediaWikiGateway.HEADERS).json()
         html_doc = res["parse"]["text"]
         return html_doc
 
@@ -70,7 +72,7 @@ class MediaWikiGateway:
                    "section": 0,
                    "redirects": True,
                    "page": self.title}
-        res = requests.get(MediaWikiGateway.URL, payload).json()
+        res = requests.get(MediaWikiGateway.URL, params=payload, headers=MediaWikiGateway.HEADERS).json()
         try:
             html_doc = res["parse"]["text"]
             return html_doc
@@ -93,7 +95,7 @@ class WikipediaTableParser:
         Returns:
             施設名とキロポスト情報のDataframe
         """
-        dfs = pd.read_html(self.html_doc.replace('<br />', ' '), match="施設名")
+        dfs = pd.read_html(io.StringIO(self.html_doc.replace('<br />', ' ')), match="施設名")
 
         if self.table_num is None:
             for i in range(WikipediaTableParser.MAX_SEARCH):
@@ -150,7 +152,7 @@ class WikipediaInfoboxParser:
         Returns:
             lon, lat
         """
-        df = pd.read_html(self.html_doc, index_col=0, match="所在地")[0]
+        df = pd.read_html(io.StringIO(self.html_doc), index_col=0, match="所在地")[0]
         lonlatstr = df.loc["所在地", :].values[0]
         lon_match = re.search(r"(?<=東経)[0-9]+\.[0-9]+(?=度)", lonlatstr)
         lat_match = re.search(r"(?<=北緯)[0-9]+\.[0-9]+(?=度)", lonlatstr)
