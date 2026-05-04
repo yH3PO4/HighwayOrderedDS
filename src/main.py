@@ -128,12 +128,12 @@ class WikipediaTableParser:
             施設名とキロポスト情報のDataframe
         """
         df.columns = pd.Index(df.columns)  # MultiIndexだったらIndexに直す
-        df.rename(columns={df.columns[1]: "name", df.columns[3]: "kp"}, inplace=True)
+        df = df.rename(columns={df.columns[1]: "name", df.columns[3]: "kp"})
         df = df[["name", "kp"]].copy()
-        df["kp"] = df["kp"].astype(str).str.replace(r"\s.+", "", regex=True)  # kpが複数書かれている場合最初だけ残して削除
+        df["kp"] = df["kp"].astype(str).str.replace(r"\s.+", "", regex=True)  # kp가複数書かれている場合最初だけ残して削除
         df["kp"] = pd.to_numeric(df["kp"], errors="coerce")
-        df.dropna(inplace=True)
-        df.reset_index(drop=True, inplace=True)
+        df = df.dropna()
+        df = df.reset_index(drop=True)
 
         if df.empty:
             raise ValueError
@@ -208,15 +208,15 @@ class RoadMaker:
 
         self.df_wiki_table = self._parse_attr(self.df_wiki_table)
 
-        self.df_wiki_table.drop_duplicates(subset=["name", "is_IC", "is_JCT", "is_SIC", "is_SAPA"],
-                                           keep="first", inplace=True)  # Wikipediaがたまに多段になってるのを消す
+        self.df_wiki_table = self.df_wiki_table.drop_duplicates(subset=["name", "is_IC", "is_JCT", "is_SIC", "is_SAPA"],
+                                           keep="first")  # Wikipediaがたまに多段になってるのを消す
 
         self.df_point = pd.merge(self.df_wiki_table, self.df_joint, on="name", how="left")
         print(self.df_point)
 
         # 名称の表記ゆれに対応
         df_nan = self.df_point[self.df_point["coordinates"].isnull()].copy()
-        df_nan.drop("coordinates", axis=1, inplace=True)
+        df_nan = df_nan.drop("coordinates", axis=1)
 
         if not df_nan.empty:
             print("高速道路時系列データと対応がない施設があります。")
@@ -229,16 +229,15 @@ class RoadMaker:
             print("名称の一部が高速道路時系列データと合致する施設があります。")
             print(df_prefix[["name", "name_prefix", "name_joint", "coordinates"]].dropna(subset=["coordinates"]))
             remain_indices = set(map(int, input("残したい行番号を一行に続けて入力してください:").split()))
-            df_prefix.drop(set(df_prefix.index) - remain_indices, inplace=True)
+            df_prefix = df_prefix.drop(set(df_prefix.index) - remain_indices)
             del df_prefix["kp"]
 
             self.df_point = self.df_point.merge(df_prefix[["name", "name_prefix", "coordinates"]], on="name",
                                                 how="left")
             self.df_point["coordinates"] = self.df_point["coordinates_x"].combine_first(self.df_point["coordinates_y"])
-            self.df_point.dropna(subset=["coordinates"], inplace=True)
-            self.df_point.drop(["name_prefix_x", "name_prefix_y", "coordinates_x", "coordinates_y"], axis=1,
-                               inplace=True)
-            self.df_point.reset_index(inplace=True, drop=True)
+            self.df_point = self.df_point.dropna(subset=["coordinates"])
+            self.df_point = self.df_point.drop(["name_prefix_x", "name_prefix_y", "coordinates_x", "coordinates_y"], axis=1)
+            self.df_point = self.df_point.reset_index(drop=True)
             print(self.df_point)
 
         # 名前が重複したら選択して削除可能にする
@@ -248,15 +247,15 @@ class RoadMaker:
             print(dup)
             plot.plot_points(dup)
             remain_indices = set(map(int, input("残したい行番号を一行に続けて入力してください:").split()))
-            self.df_point.drop(set(dup.index) - remain_indices, inplace=True)
-            self.df_point.reset_index(inplace=True, drop=True)
+            self.df_point = self.df_point.drop(set(dup.index) - remain_indices)
+            self.df_point = self.df_point.reset_index(drop=True)
             print(self.df_point)
 
         # 地点の最終確認
         plot.plot_points(self.df_point)
         del_indices = set(map(int, input("削除したい行番号を一行に続けて入力してください:").split()))
-        self.df_point.drop(del_indices, inplace=True)
-        self.df_point.reset_index(inplace=True, drop=True)
+        self.df_point = self.df_point.drop(del_indices)
+        self.df_point = self.df_point.reset_index(drop=True)
 
     def find_all_path(self) -> None:
         """
@@ -355,18 +354,17 @@ class RoadMaker:
 
         # SA, PA 以外は今のところ扱わない
         df_SAPA = df_SAPA[(df_SAPA["_merge"] == "both") | df_SAPA["is_SAPA"]].copy()
-        df_SAPA["name"].where(df_SAPA["_merge"] == "both",
-                              df_SAPA["name"].replace(r"(.*?(SA|PA)).*", r"\1", regex=True),
-                              inplace=True)
-        df_SAPA.drop_duplicates(subset=["name", "kp"], inplace=True)
+        df_SAPA["name"] = df_SAPA["name"].where(df_SAPA["_merge"] == "both",
+                              df_SAPA["name"].replace(r"(.*?(SA|PA)).*", r"\1", regex=True))
+        df_SAPA = df_SAPA.drop_duplicates(subset=["name", "kp"])
 
         # 存在しないSA,PAを削除
         if not (estimate := df_SAPA[df_SAPA["_merge"] == "right_only"]).empty:
             print("時系列データにない SA, PA が見つかりました。")
             print(estimate.name)
             del_indices = set(map(int, input("削除したい行番号を一行に続けて入力してください:").split()))
-            df_SAPA.drop(del_indices, inplace=True)
-        df_SAPA.reset_index(drop=True, inplace=True)
+            df_SAPA = df_SAPA.drop(del_indices)
+        df_SAPA = df_SAPA.reset_index(drop=True)
 
         df_SAPA = df_SAPA.merge(self.df_path, left_on="name", right_on="source", how="left")
 
@@ -420,7 +418,7 @@ class RoadMaker:
 
         gdf_point_cur = gpd.GeoDataFrame(self.df_point,
                                          geometry=self.df_point["coordinates"].apply(lambda x: Point(*x)))
-        gdf_point_cur.drop(columns="coordinates", inplace=True)
+        gdf_point_cur = gdf_point_cur.drop(columns="coordinates")
         gdf_point_cur["order"] = pd.RangeIndex(stop=len(gdf_point_cur))
         gdf_point_cur["road_name"] = str(self.road_name)
         gdf_point_cur["is_IC"] = gdf_point_cur["is_IC"].astype(int)
@@ -432,7 +430,7 @@ class RoadMaker:
 
         print(gdf_point_cur)
         gdf_point = pd.concat([gdf_point, gdf_point_cur])
-        gdf_point.sort_values(["road_name", "order"], inplace=True)
+        gdf_point = gdf_point.sort_values(["road_name", "order"])
         gdf_point.to_file(RoadMaker.RESULT_HIGHWAY_POINT, driver='GeoJSON')
 
         # LINESTRING
@@ -449,7 +447,7 @@ class RoadMaker:
 
         print(gdf_path_cur)
         gdf_path = pd.concat([gdf_path, gdf_path_cur])
-        gdf_path.sort_values(["road_name", "order"], inplace=True)
+        gdf_path = gdf_path.sort_values(["road_name", "order"])
         gdf_path.to_file(RoadMaker.RESULT_HIGHWAY_PATH, driver='GeoJSON')
 
     def _del_path(self, del_indices: set[int]) -> None:
@@ -458,8 +456,8 @@ class RoadMaker:
         Args:
             del_indices(set): 削除する区間の始点
         """
-        self.df_path.drop(del_indices, inplace=True)
-        self.df_path.reset_index(inplace=True)
+        self.df_path = self.df_path.drop(del_indices)
+        self.df_path = self.df_path.reset_index()
         self.calc_line_length()
         plot.plot_oneline(self)
         print(f"区間 {del_indices} が削除されました。")
@@ -538,10 +536,10 @@ class RoadMaker:
         df["is_JCT"] = df["name"].str.contains("JCT")
         df["is_SAPA"] = df["name"].str.contains("SA|PA", regex=True)
 
-        df["name"].replace(r"(.*)出入口$", r"\1", regex=True, inplace=True)
-        df["name"].replace(r"(.*)(出口|入口)$", r"\1", regex=True, inplace=True)
-        df["name"].replace(r"([^S]+)IC.*", r"\1", regex=True, inplace=True)  # SICは残す
-        df["name"].replace(r"(.*?(JCT|SIC)).*", r"\1", regex=True, inplace=True)
+        df["name"] = df["name"].replace(r"(.*)出入口$", r"\1", regex=True)
+        df["name"] = df["name"].replace(r"(.*)(出口|入口)$", r"\1", regex=True)
+        df["name"] = df["name"].replace(r"([^S]+)IC.*", r"\1", regex=True)  # SICは残す
+        df["name"] = df["name"].replace(r"(.*?(JCT|SIC)).*", r"\1", regex=True)
 
         return df
 
@@ -556,8 +554,8 @@ class RoadMaker:
             data = json.load(f)
         df_joint: pd.DataFrame = pd.json_normalize(data["features"])
         df_joint = df_joint[df_joint["properties.N06_014"] == 9999]
-        df_joint.rename(columns={"properties.N06_018": "name", "geometry.coordinates": "coordinates"}, inplace=True)
-        df_joint.replace(r"\\/", r"\/", regex=True, inplace=True)
+        df_joint = df_joint.rename(columns={"properties.N06_018": "name", "geometry.coordinates": "coordinates"})
+        df_joint = df_joint.replace(r"\\/", r"\/", regex=True)
         df_joint["name_prefix"] = df_joint["name"].replace(r"[ -~]+", "", regex=True)
         df_joint["coordinates"] = df_joint["coordinates"].apply(_round_coordinate)
         return df_joint[["name", "name_prefix", "coordinates"]]
@@ -572,7 +570,7 @@ class RoadMaker:
         with open(RoadMaker.HIGHWAY_SECTION, encoding="utf-8_sig") as f:
             data = json.load(f)
         df_section: pd.DataFrame = pd.json_normalize(data["features"])
-        df_section.rename(columns={"geometry.coordinates": "coordinates_edge"}, inplace=True)
+        df_section = df_section.rename(columns={"geometry.coordinates": "coordinates_edge"})
 
         G = nx.Graph()
         for edges in df_section["coordinates_edge"]:
