@@ -2482,6 +2482,8 @@
 { "type": "Feature", "properties": { "N06_012": 2025, "N06_013": 2025, "N06_014": 9999, "N06_015": "EA03_881001", "N06_016": null, "N06_017": null, "N06_018": "平戸", "N06_019": "1" }, "geometry": { "type": "Point", "coordinates": [ 129.647097237647074, 33.326971735562886 ] } },
 { "type": "Feature", "properties": { "N06_012": 2025, "N06_013": 2025, "N06_014": 9999, "N06_015": "EA03_736003", "N06_016": null, "N06_017": null, "N06_018": "牧山", "N06_019": "1" }, "geometry": { "type": "Point", "coordinates": [ 130.813054952694131, 33.894473432482599 ] } },
 { "type": "Feature", "properties": { "N06_012": null, "N06_013": null, "N06_014": null, "N06_015": "EA03_505007", "N06_016": null, "N06_017": null, "N06_018": "八戸JCT", "N06_019": null }, "geometry": { "type": "Point", "coordinates": [ 141.458046, 40.4599 ] } },
+{ "type": "Feature", "properties": { "N06_012": null, "N06_013": null, "N06_014": null, "N06_015": "EA03_686037", "N06_016": null, "N06_017": null, "N06_018": "大井JCT", "N06_019": null }, "geometry": { "type": "Point", "coordinates": [ 139.750776, 35.607832 ] } },
+{ "type": "Feature", "properties": { "N06_012": null, "N06_013": null, "N06_014": null, "N06_015": "EA03_505007", "N06_016": null, "N06_017": null, "N06_018": "八戸JCT", "N06_019": null }, "geometry": { "type": "Point", "coordinates": [ 141.458046, 40.4599 ] } },
 { "type": "Feature", "properties": { "N06_012": null, "N06_013": null, "N06_014": null, "N06_015": "EA03_686037", "N06_016": null, "N06_017": null, "N06_018": "大井JCT", "N06_019": null }, "geometry": { "type": "Point", "coordinates": [ 139.750776, 35.607832 ] } }
 ]
 }

@@ -19,55 +19,61 @@ def apply_highway_section_erratum(df_path_raw, df_path_erratum):
 
         if "追加" in description:
             # Regex to extract two existing points and the new point
-            # Example: "東北道の [ 140.489097, 37.832305 ], [ 140.490105, 37.833463 ] の間に 桑折JCT [ 140.48976041, 37.83306713 ] を追加"
             match = re.search(
                 r'\[\s*(\d+\.\d+)\s*,\s*(\d+\.\d+)\s*\]\s*,\s*\[\s*(\d+\.\d+)\s*,\s*(\d+\.\d+)\s*\]\s*の間に\s*.*?\s*\[\s*(\d+\.\d+)\s*,\s*(\d+\.\d+)\s*\]\s*を追加',
                 description
             )
             if match:
-                # Existing point 1
                 lon1, lat1 = float(match.group(1)), float(match.group(2))
-                # Existing point 2
                 lon2, lat2 = float(match.group(3)), float(match.group(4))
-                # New point to insert
                 new_lon, new_lat = float(match.group(5)), float(match.group(6))
-                new_point_geom = Point(new_lon, new_lat)
+                
+                p1_desc = (lon1, lat1)
+                p2_desc = (lon2, lat2)
+                new_p = (new_lon, new_lat)
 
                 idx = df_path_raw[df_path_raw["N06_004"] == feature_id].index
                 if not idx.empty:
-                    original_linestring = df_path_raw.loc[idx[0], "geometry"]
-                    if isinstance(original_linestring, LineString):
-                        coords = list(original_linestring.coords)
-                        inserted = False
-
-                        p1_desc = (lon1, lat1)
-                        p2_desc = (lon2, lat2)
-
+                    geom = df_path_raw.loc[idx[0], "geometry"]
+                    
+                    if geom.geom_type == "LineString":
+                        coords = list(geom.coords)
                         try:
                             idx1 = coords.index(p1_desc)
                             idx2 = coords.index(p2_desc)
-
                             if abs(idx1 - idx2) == 1:
-                                insert_at = max(idx1, idx2)
-                                coords.insert(insert_at, (new_point_geom.x, new_point_geom.y))
-                                inserted = True
+                                coords.insert(max(idx1, idx2), new_p)
+                                df_path_raw.loc[idx[0], "geometry"] = LineString(coords)
+                                print(f"Inserted point into LineString {feature_id}")
                             else:
-                                # If the two described points are not consecutive, try to find the segment
-                                # that is closest to the new point and insert it there.
-                                # This is a more advanced geometric operation.
-                                # For simplicity, if not directly between the two described points, append for now.
-                                pass
+                                print(f"Warning: Points for {feature_id} are not consecutive in LineString.")
                         except ValueError:
-                            pass
-
-                        if not inserted:
-                            # Fallback: If no specific insertion point found, append the new point.
-                            coords.append((new_point_geom.x, new_point_geom.y))
-                            print(f"Warning: Could not precisely insert new point for {feature_id}. Appended instead.")
-
-                        df_path_raw.loc[idx[0], "geometry"] = LineString(coords)
+                            print(f"Warning: Could not find points for {feature_id} in LineString.")
+                            
+                    elif geom.geom_type == "MultiLineString":
+                        new_lines = []
+                        found = False
+                        for line in geom.geoms:
+                            coords = list(line.coords)
+                            if not found:
+                                try:
+                                    idx1 = coords.index(p1_desc)
+                                    idx2 = coords.index(p2_desc)
+                                    if abs(idx1 - idx2) == 1:
+                                        coords.insert(max(idx1, idx2), new_p)
+                                        found = True
+                                        print(f"Inserted point into MultiLineString {feature_id}")
+                                except ValueError:
+                                    pass
+                            new_lines.append(LineString(coords))
+                        
+                        if found:
+                            from shapely.geometry import MultiLineString
+                            df_path_raw.loc[idx[0], "geometry"] = MultiLineString(new_lines)
+                        else:
+                            print(f"Warning: Could not find consecutive points for {feature_id} in any part of MultiLineString.")
                     else:
-                        print(f"Warning: Geometry for {feature_id} is not a LineString.")
+                        print(f"Warning: Unsupported geometry type {geom.geom_type} for {feature_id}")
                 else:
                     print(f"Warning: feature_id {feature_id} not found in df_path_raw.")
             else:
